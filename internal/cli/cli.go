@@ -79,6 +79,9 @@ type cmd struct {
 	ctx  context.Context
 	// cmdPath is e.g. "container deploy", for messages.
 	cmdPath string
+	// capture, when set (th __docs), receives the command's flags instead
+	// of the command running.
+	capture func(*flagSet)
 }
 
 // Run executes args (without the program name) and returns the exit code.
@@ -271,6 +274,10 @@ func (c *cmd) parse(fs *flagSet, args []string) error {
 		if _, exists := fs.defs[d.name]; !exists {
 			fs.add(d)
 		}
+	}
+	if c.capture != nil {
+		c.capture(fs)
+		return errDocCaptured
 	}
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, errHelp) {
