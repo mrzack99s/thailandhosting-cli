@@ -34,7 +34,7 @@ func init() {
 func docsCmd(c *cmd, _ []string) error {
 	names := make([]string, 0, len(commands))
 	for k := range commands {
-		if !strings.HasPrefix(k, "__") && k != "version" {
+		if !strings.HasPrefix(k, "__") {
 			names = append(names, k)
 		}
 	}
@@ -44,7 +44,7 @@ func docsCmd(c *cmd, _ []string) error {
 		sub := &cmd{app: c.app, ctx: c.ctx, cmdPath: name}
 		var captured *flagSet
 		sub.capture = func(fs *flagSet) { captured = fs }
-		_ = commands[name](sub, nil)
+		_ = commands[name](sub, []string{})
 		d := docCommand{Command: name, Flags: []docFlag{}}
 		if captured != nil {
 			d.Usage = captured.usage
@@ -72,7 +72,6 @@ func docsCmd(c *cmd, _ []string) error {
 		}
 		out = append(out, d)
 	}
-	out = append(out, docCommand{Command: "version", Usage: "Usage: th version\n\nPrints the version of th.", Flags: []docFlag{}})
 	enc := json.NewEncoder(c.app.Stdout)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
