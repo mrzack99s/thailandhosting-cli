@@ -1,0 +1,35 @@
+# Pushing a tag v<major>.<minor>.<patch> builds th for every platform,
+# attests where the archives came from, and publishes a GitHub Release.
+# Downloads are served by GitHub, never by ThailandHosting's servers.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write      # create the release
+  id-token: write      # sign the build provenance
+  attestations: write  # store it
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Build archives
+        run: go run ./scripts/release -version "${GITHUB_REF_NAME#v}"
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/th_*"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "th $GITHUB_REF_NAME" --generate-notes --verify-tag
