@@ -23,9 +23,15 @@ func servicesList(c *cmd, args []string) error {
 	if err != nil {
 		return err
 	}
-	svcs, err := c.listContainers(cl, pid)
+	all, err := c.listContainers(cl, pid)
 	if err != nil {
 		return err
+	}
+	svcs := []api.Service{}
+	for _, s := range all {
+		if !isFunction(s) { // th functions list
+			svcs = append(svcs, s)
+		}
 	}
 	if c.json() {
 		return c.printJSON(svcs)
@@ -153,6 +159,11 @@ func servicesLogs(c *cmd, args []string) error {
 	if err != nil {
 		return err
 	}
+	return c.printServiceLogs(cl, svc, lines)
+}
+
+// printServiceLogs prints the latest lines a Container or function wrote.
+func (c *cmd) printServiceLogs(cl *api.Client, svc *api.Service, lines int) error {
 	var l api.Logs
 	raw, err := cl.Do(c.ctx, http.MethodGet, fmt.Sprintf("/api/v1/services/%s/logs?lines=%d", svc.ID, lines), nil, &l)
 	if err != nil {

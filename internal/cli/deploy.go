@@ -161,6 +161,9 @@ func runDeploy(c *cmd, args []string) error {
 	if err != nil {
 		return err
 	}
+	if existing != nil && isFunction(*existing) {
+		return fmt.Errorf("[%s] is a function; deploy its code with: th functions deploy %s", name, name)
+	}
 	var regionID string
 	if existing != nil {
 		regionID = existing.RegionID
