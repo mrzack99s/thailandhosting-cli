@@ -266,7 +266,7 @@ func (c *cmd) parse(fs *flagSet, args []string) error {
 	for _, d := range []*flagDef{
 		{name: "project", help: "Project ID or slug (default: config / TH_PROJECT)", kind: kindString, str: &c.g.project},
 		{name: "region", help: "Region ID (default: config / TH_REGION)", kind: kindString, str: &c.g.region},
-		{name: "endpoint", help: "Console API endpoint (default: config / TH_ENDPOINT)", kind: kindString, str: &c.g.endpoint},
+		{name: "endpoint", help: "API endpoint (default: config / TH_ENDPOINT, else https://cloud.thailandhosting.com)", kind: kindString, str: &c.g.endpoint},
 		{name: "format", help: "Output format: text or json", kind: kindString, str: &c.g.format},
 		{name: "quiet", help: "Do not prompt; assume yes", kind: kindBool, b: &c.g.quiet},
 	} {

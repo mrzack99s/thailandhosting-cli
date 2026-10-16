@@ -12,8 +12,9 @@ import (
 	"sort"
 )
 
-// DefaultEndpoint is the Console API used when nothing else is set.
-const DefaultEndpoint = "https://console.thailandhosting.com"
+// DefaultEndpoint is the CLI API used when nothing else is set. The
+// Console host (https://console.thailandhosting.com) answers too.
+const DefaultEndpoint = "https://cloud.thailandhosting.com"
 
 // Config is the saved CLI state.
 type Config struct {
