@@ -292,11 +292,33 @@ func matchRevision(revs []api.Revision, want string) *api.Revision {
 }
 
 func buildsList(c *cmd, args []string) error {
-	var repo string
-	fs := newFlagSet("builds list", "Usage: th builds list [--repository NAME]\n\nLists the Project's latest 50 builds, newest first.")
-	fs.String(&repo, "repository", "Only builds of this repository")
+	var repo, status, kind string
+	fs := newFlagSet("builds list", `Usage: th builds list [--status STATUS] [--kind container|function] [--repository REPOSITORY]
+
+Lists the Project's latest 100 builds, Containers and Functions alike,
+newest first. REPOSITORY is where the image went (IMAGE in the default
+registry, REGISTRY/IMAGE in another); DEPLOYED TO names the services whose
+revisions use it. "image removed" means cleanup or a delete took the image
+out of the registry.
+
+Examples:
+  th builds list --status active
+  th builds list --kind function --status failed`)
+	fs.String(&status, "status", "Only builds that are active (queued or running), queued, running, succeeded, failed or cancelled")
+	fs.String(&kind, "kind", "Only container or function builds")
+	fs.String(&repo, "repository", "Only builds into this repository")
 	if err := c.parse(fs, args); err != nil {
 		return err
+	}
+	switch status {
+	case "", "active", "queued", "running", "succeeded", "failed", "cancelled":
+	default:
+		return fmt.Errorf("--status must be active, queued, running, succeeded, failed or cancelled, not %q", status)
+	}
+	switch kind {
+	case "", "container", "function":
+	default:
+		return fmt.Errorf("--kind must be container or function, not %q", kind)
 	}
 	cl, err := c.client(true)
 	if err != nil {
@@ -306,17 +328,26 @@ func buildsList(c *cmd, args []string) error {
 	if err != nil {
 		return err
 	}
-	path := "/api/v1/run/builds?projectId=" + q(pid)
-	if repo != "" {
-		path += "&repository=" + q(repo)
+	path := "/api/v1/run/registries/builds?projectId=" + q(pid)
+	if status != "" {
+		path += "&status=" + q(status)
 	}
-	var builds []api.Build
-	raw, err := cl.Do(c.ctx, http.MethodGet, path, nil, &builds)
-	if err != nil {
+	var all []api.ProjectBuild
+	if _, err := cl.Do(c.ctx, http.MethodGet, path, nil, &all); err != nil {
 		return err
 	}
+	builds := []api.ProjectBuild{}
+	for _, b := range all {
+		if (kind == "" || b.Kind == kind) && (repo == "" || b.Repository == repo) {
+			builds = append(builds, b)
+		}
+	}
 	if c.json() {
-		return c.printJSON(raw)
+		return c.printJSON(builds)
+	}
+	if len(builds) == 0 {
+		c.info("Listed 0 items.")
+		return nil
 	}
 	rows := [][]string{}
 	for _, b := range builds {
@@ -328,9 +359,13 @@ func buildsList(c *cmd, args []string) error {
 		if b.Tag != "" {
 			ref += ":" + b.Tag
 		}
-		rows = append(rows, []string{b.ID, ref, b.Status, shortTime(b.CreatedAt), dur})
+		st := b.Status
+		if b.ImageGone {
+			st += " (image removed)"
+		}
+		rows = append(rows, []string{b.ID, dash(b.Kind), ref, st, shortTime(b.CreatedAt), dur, dash(strings.Join(b.DeployedTo, ","))})
 	}
-	c.table([]string{"ID", "REPOSITORY", "STATUS", "CREATED", "DURATION"}, rows)
+	c.table([]string{"ID", "KIND", "REPOSITORY", "STATUS", "CREATED", "DURATION", "DEPLOYED TO"}, rows)
 	return nil
 }
 

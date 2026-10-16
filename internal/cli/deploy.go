@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -25,17 +26,22 @@ A new service is created when NAME does not exist yet (it needs a region);
 otherwise a new revision of it is deployed and receives all traffic.
 Flags you leave out keep the service's current settings.
 
+A source build stores its image in the Project's default registry, as
+<host>/<project>/NAME; --repository REGISTRY/IMAGE stores it in another
+registry of the Project instead (see th registry list).
+
 Examples:
   th container deploy api --source . --region bkk
+  th container deploy api --source . --repository prod/api --tag v1.4.0
   th container deploy api --image ghcr.io/acme/api:1.4 --port 3000
   th container deploy api --cpu 0.5 --memory 512Mi --env NODE_ENV=production`
 
 func runDeploy(c *cmd, args []string) error {
 	var (
-		source, image, cpu, memory, computeClass, timeout, dockerfile, tag, message, healthPath string
-		port, minInst, maxInst, concurrency                                                     int
-		envs, setEnv, secretEnv, command, cmdArgs                                               []string
-		allowUnauth, cpuAlways, async, clearCommand, clearArgs                                  bool
+		source, image, cpu, memory, computeClass, timeout, dockerfile, tag, message, healthPath, repository string
+		port, minInst, maxInst, concurrency                                                                 int
+		envs, setEnv, secretEnv, command, cmdArgs                                                           []string
+		allowUnauth, cpuAlways, async, clearCommand, clearArgs                                              bool
 	)
 	fs := newFlagSet("container deploy", deployUsage)
 	fs.String(&source, "source", "Directory to upload and build (default .)")
@@ -60,6 +66,7 @@ func runDeploy(c *cmd, args []string) error {
 	fs.Bool(&clearArgs, "clear-args", "Use the image's own arguments")
 	fs.String(&dockerfile, "dockerfile", "Dockerfile path inside the source (default Dockerfile)")
 	fs.String(&tag, "tag", "Image tag for a source build")
+	fs.String(&repository, "repository", "Where a source build stores its image: IMAGE or REGISTRY/IMAGE (default NAME)")
 	fs.String(&message, "message", "Note stored with the revision")
 	fs.Bool(&async, "async", "Return once the deploy is accepted (only with --image)")
 	if err := c.parse(fs, args); err != nil {
@@ -77,6 +84,14 @@ func runDeploy(c *cmd, args []string) error {
 	}
 	if image == "" && source == "" {
 		source = "."
+	}
+	if repository != "" && image != "" {
+		return errors.New("--repository is for a source build; with --image the image is deployed as it is")
+	}
+	if repository == "" {
+		repository = name
+	} else if err := validateRepository(repository); err != nil {
+		return err
 	}
 	if async && image == "" {
 		return errors.New("--async needs --image: a source deploy waits for its build. (Ctrl+C during the build leaves it running on the server.)")
@@ -180,7 +195,7 @@ func runDeploy(c *cmd, args []string) error {
 		} else if existing != nil {
 			cls = existing.ComputeClass
 		}
-		build, err = c.sourceBuild(cl, sourceBuildInput{dir: source, projectID: projectID, repository: name, tag: tag, dockerfile: dockerfile, regionID: regionID, computeClass: cls})
+		build, err = c.sourceBuild(cl, sourceBuildInput{dir: source, projectID: projectID, repository: repository, tag: tag, dockerfile: dockerfile, regionID: regionID, computeClass: cls})
 		if err != nil {
 			return err
 		}
@@ -279,6 +294,25 @@ func (c *cmd) setAccess(cl *api.Client, svc *api.Service, allow bool) error {
 		svc.InvokerToken = res.InvokerToken
 	}
 	svc.AllowUnauthenticated = allow
+	return nil
+}
+
+var (
+	repoNameRE     = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*$`)
+	registryNameRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$`)
+)
+
+// validateRepository checks --repository: IMAGE (the default registry) or
+// REGISTRY/IMAGE.
+func validateRepository(s string) error {
+	reg, image, named := strings.Cut(s, "/")
+	if !named {
+		image = reg
+	}
+	if strings.Contains(image, "/") || !repoNameRE.MatchString(image) || len(image) > 63 ||
+		(named && (!registryNameRE.MatchString(reg) || reg == "default")) {
+		return fmt.Errorf("--repository is IMAGE or REGISTRY/IMAGE of lowercase letters, digits and . _ - (e.g. api or prod/api), not %q", s)
+	}
 	return nil
 }
 

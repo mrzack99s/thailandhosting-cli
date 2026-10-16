@@ -264,4 +264,25 @@ type RegistryImage struct {
 	// keeps it for rollback.
 	UsedBy []string `json:"usedBy"`
 	Kept   bool     `json:"kept"`
+	// Pulls counts pulls since the image was pushed; BuildNumber is the
+	// build that made it, when one of ours did.
+	Pulls        int64  `json:"pulls"`
+	LastPulledAt string `json:"lastPulledAt,omitempty"`
+	BuildID      string `json:"buildId,omitempty"`
+	BuildNumber  int    `json:"buildNumber,omitempty"`
+}
+
+// ProjectBuild is one build of GET /api/v1/run/registries/builds: a
+// Container or Function build with where its image went.
+type ProjectBuild struct {
+	Build
+	Kind         string   `json:"kind"` // container | function
+	ServiceID    string   `json:"serviceId,omitempty"`
+	ServiceName  string   `json:"serviceName,omitempty"`
+	RegistryID   string   `json:"registryId,omitempty"`
+	RegistryName string   `json:"registryName,omitempty"`
+	ImageName    string   `json:"imageName"`
+	Digest       string   `json:"digest,omitempty"`
+	ImageGone    bool     `json:"imageGone"`
+	DeployedTo   []string `json:"deployedTo"`
 }

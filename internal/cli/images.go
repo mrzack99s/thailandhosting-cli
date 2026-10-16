@@ -143,7 +143,7 @@ An image a Container runs cannot be deleted. --quiet skips the prompt.`)
 	if err != nil {
 		return err
 	}
-	img, err := matchDigest(imgs, ref.repo, ref.digest)
+	img, err := matchDigest(imgs, ref.repo, ref.digest, "th container images list "+ref.repo)
 	if err != nil {
 		return err
 	}
@@ -269,15 +269,16 @@ func (c *cmd) parseImageRef(cl *api.Client, pid, s string) (imageRef, error) {
 	return r, nil
 }
 
-// matchDigest finds a full digest or a unique hex prefix of one.
-func matchDigest(imgs []api.RegistryImage, repo, want string) (*api.RegistryImage, error) {
+// matchDigest finds a full digest or a unique hex prefix of one; listCmd
+// is the command that lists repo's images, for the error messages.
+func matchDigest(imgs []api.RegistryImage, repo, want, listCmd string) (*api.RegistryImage, error) {
 	if fullDigestRE.MatchString(want) {
 		for i := range imgs {
 			if imgs[i].Digest == want {
 				return &imgs[i], nil
 			}
 		}
-		return nil, fmt.Errorf("image %s@%s not found. List them with: th container images list %s", repo, want, repo)
+		return nil, fmt.Errorf("image %s@%s not found. List them with: %s", repo, want, listCmd)
 	}
 	var found []*api.RegistryImage
 	for i := range imgs {
@@ -287,7 +288,7 @@ func matchDigest(imgs []api.RegistryImage, repo, want string) (*api.RegistryImag
 	}
 	switch len(found) {
 	case 0:
-		return nil, fmt.Errorf("no image of %s has a digest starting with %s. List them with: th container images list %s", repo, want, repo)
+		return nil, fmt.Errorf("no image of %s has a digest starting with %s. List them with: %s", repo, want, listCmd)
 	case 1:
 		return found[0], nil
 	}

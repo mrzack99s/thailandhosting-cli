@@ -69,6 +69,21 @@ th container images delete api:old-tag
 th auth configure-docker       # to docker push your own images
 ```
 
+## Container Registry
+
+Builds land in the Project's default registry (`<host>/<project>/<image>`);
+create more for staging, production or images you ship to others
+(`<host>/<project>/<registry>/<image>`).
+
+```
+th registry create prod --immutable-tags --keep-tags "v*"
+th container deploy api --source . --repository prod/api --tag v1.4.0
+th registry images copy staging/api:v1.4.0 prod/api     # promote; layers are shared
+th registry tokens create prod --name ci --permission write
+th registry cleanup default --preview --keep-latest 10
+th builds list --status active                          # Container and Function builds
+```
+
 ## Static Web
 
 ```
