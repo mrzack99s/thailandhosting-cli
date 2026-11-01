@@ -282,7 +282,13 @@ func (c *cmd) servingRevisionName(cl *api.Client, svc api.Service) string {
 }
 
 func (c *cmd) setAccess(cl *api.Client, svc *api.Service, allow bool) error {
-	body := map[string]any{"ingress": svc.Ingress, "allowUnauthenticated": allow}
+	return c.putAccess(cl, svc, svc.Ingress, allow)
+}
+
+// putAccess sets who may reach a service: ingress all, internal or (a
+// function only) triggers, and whether a call needs the invoker token.
+func (c *cmd) putAccess(cl *api.Client, svc *api.Service, ingress string, allow bool) error {
+	body := map[string]any{"ingress": ingress, "allowUnauthenticated": allow}
 	var res struct {
 		Service      api.Service `json:"service"`
 		InvokerToken string      `json:"invokerToken"`
@@ -293,7 +299,7 @@ func (c *cmd) setAccess(cl *api.Client, svc *api.Service, allow bool) error {
 	if res.InvokerToken != "" {
 		svc.InvokerToken = res.InvokerToken
 	}
-	svc.AllowUnauthenticated = allow
+	svc.Ingress, svc.AllowUnauthenticated, svc.URL = res.Service.Ingress, res.Service.AllowUnauthenticated, res.Service.URL
 	return nil
 }
 

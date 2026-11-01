@@ -29,14 +29,14 @@ import (
 
 func init() {
 	register(map[string]handler{
-		"functions list":     functionsList,
-		"functions describe": functionsDescribe,
-		"functions deploy":   functionsDeploy,
-		"functions pull":     functionsPull,
-		"functions call":     functionsCall,
-		"functions logs":     functionsLogs,
-		"functions delete":   functionsDelete,
-		"functions runtimes": functionsRuntimes,
+		"functions list":              functionsList,
+		"functions describe":          functionsDescribe,
+		"functions deploy":            functionsDeploy,
+		"functions pull":              functionsPull,
+		"functions call":              functionsCall,
+		"functions logs":              functionsLogs,
+		"functions delete":            functionsDelete,
+		"functions runtimes":          functionsRuntimes,
 		"functions versions list":     functionsVersionsList,
 		"functions versions activate": functionsVersionsActivate,
 	},
@@ -62,10 +62,10 @@ type fnRuntime struct {
 	Recommended bool   `json:"recommended"`
 	Deprecated  bool   `json:"deprecated"`
 	Name        string `json:"name"`
-	Language   string `json:"language"`
-	MainFile   string `json:"mainFile"`
-	EntryPoint string `json:"entryPoint"`
-	Hint       string `json:"hint"`
+	Language    string `json:"language"`
+	MainFile    string `json:"mainFile"`
+	EntryPoint  string `json:"entryPoint"`
+	Hint        string `json:"hint"`
 }
 
 type fnBuild struct {
@@ -237,6 +237,7 @@ func functionsDescribe(c *cmd, args []string) error {
 	w := c.app.Stdout
 	fmt.Fprintf(w, "Function %s in region %s\n\n", s.Slug, s.RegionID)
 	fmt.Fprintf(w, "URL:          %s\n", dash(s.URL))
+	fmt.Fprintf(w, "Ingress:      %s\n", ingressText(s))
 	fmt.Fprintf(w, "Runtime:      %s\n", src.Runtime)
 	fmt.Fprintf(w, "Entry point:  %s\n", src.EntryPoint)
 	fmt.Fprintf(w, "Deploy:       %s\n", deployStateText(src))
@@ -422,7 +423,10 @@ ignored: functions always build with the platform's runtime.
 move to another version of its language.
 
 Every deploy is kept as a version (th functions versions list); --message
-describes it. --env, --set-env-vars and --secret-env replace every variable
+describes it. --ingress sets who reaches the function: all (the internet,
+the default), internal (other services in its project) or triggers (no
+endpoint at all; only its Cron and Queue triggers run it). --env,
+--set-env-vars and --secret-env replace every variable
 of the function; without them the current variables stay. Settings given
 for an existing function (--cpu, --memory, --min-instances, ...) are applied
 before its code is built.
@@ -430,14 +434,15 @@ before its code is built.
 Examples:
   th functions deploy hello
   th functions deploy hello --runtime python314 --message "Python 3.14"
-  th functions deploy orders --source ./orders --memory 512Mi --max-instances 10`
+  th functions deploy orders --source ./orders --memory 512Mi --max-instances 10
+  th functions deploy nightly-report --ingress triggers`
 
 func functionsDeploy(c *cmd, args []string) error {
 	var (
-		source, runtimeID, entry, cpu, memory, computeClass, timeout, message string
-		minInst, maxInst, concurrency                                         int
-		envs, setEnv, secretEnv                                               []string
-		allowUnauth, async, cpuAlways                                         bool
+		source, runtimeID, entry, cpu, memory, computeClass, timeout, message, ingress string
+		minInst, maxInst, concurrency                                                  int
+		envs, setEnv, secretEnv                                                        []string
+		allowUnauth, async, cpuAlways                                                  bool
 	)
 	fs := newFlagSet("functions deploy", functionsDeployUsage)
 	fs.String(&source, "source", "Directory with the function's files (default .)")
@@ -455,6 +460,7 @@ func functionsDeploy(c *cmd, args []string) error {
 	fs.Int(&concurrency, "concurrency", "Requests at once per instance (1-1000)")
 	fs.Bool(&cpuAlways, "cpu-always-allocated", "Keep CPU between requests")
 	fs.Bool(&allowUnauth, "allow-unauthenticated", "Allow public calls (default for a new function; --no-allow-unauthenticated needs an invoker token)")
+	fs.String(&ingress, "ingress", "Who reaches the function: all, internal or triggers (no endpoint, triggers only)")
 	fs.String(&message, "message", "Describe this version")
 	fs.Bool(&async, "async", "Return once the build is queued")
 	if err := c.parse(fs, args); err != nil {
@@ -543,6 +549,9 @@ func functionsDeploy(c *cmd, args []string) error {
 		}
 		in := map[string]any{"kind": "container", "engine": "function", "functionRuntime": runtimeID, "name": name, "slug": name,
 			"projectId": pid, "minReplicas": 0, "maxReplicas": 3, "allowUnauthenticated": !fs.Set("allow-unauthenticated") || allowUnauth}
+		if ingress != "" {
+			in["ingress"] = ingress
+		}
 		if region != "" {
 			in["regionId"] = region
 		}
@@ -580,7 +589,7 @@ func functionsDeploy(c *cmd, args []string) error {
 		}
 		svc = &created
 		settings = nil // given at creation
-		if created.InvokerToken != "" {
+		if created.InvokerToken != "" && created.Ingress != "triggers" {
 			c.info("Invoker token (shown once): %s", created.InvokerToken)
 		}
 	} else {
@@ -606,9 +615,19 @@ func functionsDeploy(c *cmd, args []string) error {
 			}
 			settings["cpuQuota"], settings["memoryMB"], settings["cpuBurst"] = cpuQuota, memoryMB, 0
 		}
-		if fs.Set("allow-unauthenticated") && allowUnauth != svc.AllowUnauthenticated {
-			if err := c.setAccess(cl, svc, allowUnauth); err != nil {
+		wantIngress, wantAllow := svc.Ingress, svc.AllowUnauthenticated
+		if ingress != "" {
+			wantIngress = ingress
+		}
+		if fs.Set("allow-unauthenticated") {
+			wantAllow = allowUnauth
+		}
+		if wantIngress != svc.Ingress || wantAllow != svc.AllowUnauthenticated {
+			if err := c.putAccess(cl, svc, wantIngress, wantAllow); err != nil {
 				return err
+			}
+			if svc.InvokerToken != "" && svc.Ingress != "triggers" {
+				c.info("Invoker token (shown once): %s", svc.InvokerToken)
 			}
 		}
 		if len(settings) > 0 {
@@ -774,6 +793,9 @@ func functionsCall(c *cmd, args []string) error {
 			return err
 		}
 		svc.URL = d.Service.URL
+	}
+	if svc.Ingress == "triggers" {
+		return fmt.Errorf("function [%s] has no endpoint (--ingress triggers); run one of its triggers with th triggers run NAME --service %s", svc.Slug, svc.Slug)
 	}
 	if svc.URL == "" {
 		return errors.New("the function has no public URL")
@@ -985,4 +1007,18 @@ func functionsVersionsActivate(c *cmd, args []string) error {
 	}
 	fmt.Fprintf(c.app.Stdout, "Function [%s] now serves v%d.\n", name, n)
 	return nil
+}
+
+// ingressText says who reaches a function, as --ingress names it.
+func ingressText(s api.Service) string {
+	switch s.Ingress {
+	case "triggers":
+		return "triggers (no endpoint; only its triggers run it)"
+	case "internal":
+		return "internal (services in its project)"
+	}
+	if !s.AllowUnauthenticated {
+		return "all (invoker token required)"
+	}
+	return "all"
 }

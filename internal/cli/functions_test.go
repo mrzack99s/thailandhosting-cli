@@ -24,6 +24,7 @@ type fakeFunctions struct {
 	state    string
 	logPolls int
 	triggers []map[string]any
+	ingress  string
 }
 
 func newFakeFunctions(t *testing.T) *fakeFunctions {
@@ -36,7 +37,11 @@ func newFakeFunctions(t *testing.T) *fakeFunctions {
 func (f *fakeFunctions) services() []map[string]any {
 	out := []map[string]any{{"id": "c1", "projectId": "p1", "name": "api", "slug": "api", "kind": "container", "engine": "image", "status": "active", "regionId": "th-bkk-1", "url": "https://api.example"}}
 	if f.created {
-		out = append(out, map[string]any{"id": "f1", "projectId": "p1", "name": "hello", "slug": "hello", "kind": "container", "engine": "function", "status": "active", "regionId": "th-bkk-1", "url": f.srv.URL + "/fn"})
+		fn := map[string]any{"id": "f1", "projectId": "p1", "name": "hello", "slug": "hello", "kind": "container", "engine": "function", "status": "active", "regionId": "th-bkk-1", "url": f.srv.URL + "/fn", "ingress": f.ingress}
+		if f.ingress == "triggers" {
+			fn["url"] = ""
+		}
+		out = append(out, fn)
 	}
 	return out
 }
@@ -77,6 +82,7 @@ func (f *fakeFunctions) handler(w http.ResponseWriter, r *http.Request) {
 	case "POST /api/v1/services/f1/function/versions/2/activate":
 		writeJSON(w, 200, map[string]any{"activated": true})
 	case "PUT /api/v1/services/f1/access":
+		f.ingress, _ = body["ingress"].(string)
 		writeJSON(w, 200, map[string]any{"service": f.services()[1]})
 	case "GET /api/v1/projects":
 		writeJSON(w, 200, []map[string]string{{"id": "p1", "slug": "acme"}})
@@ -250,6 +256,26 @@ func TestFunctionsListPullCallDelete(t *testing.T) {
 	}
 	if code := h.run("functions", "describe", "api"); code == 0 || !strings.Contains(h.errOut.String(), "is a Container") {
 		t.Fatalf("describe a container: %s", h.errOut)
+	}
+}
+
+func TestFunctionTriggersOnlyIngress(t *testing.T) {
+	f := newFakeFunctions(t)
+	f.created = true
+	h := newHarness(t, f.srv.URL)
+	dir := t.TempDir()
+	writeFiles(t, dir, map[string]string{"main.py": "def main(request):\n    return 'ok'\n"})
+	if code := h.run("functions", "deploy", "hello", "--source", dir, "--ingress", "triggers"); code != 0 {
+		t.Fatalf("deploy: %s", h.errOut)
+	}
+	if b := f.bodies["PUT /api/v1/services/f1/access"]; b["ingress"] != "triggers" {
+		t.Fatalf("access body %v", b)
+	}
+	if code := h.run("functions", "describe", "hello"); code != 0 || !strings.Contains(h.out.String(), "Ingress:      triggers") {
+		t.Fatalf("describe:\n%s%s", h.out, h.errOut)
+	}
+	if code := h.run("functions", "call", "hello"); code == 0 || !strings.Contains(h.errOut.String(), "no endpoint") {
+		t.Fatalf("call a trigger-only function: %d %s", code, h.errOut)
 	}
 }
 

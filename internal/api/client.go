@@ -125,9 +125,17 @@ func (c *Client) send(hc *http.Client, req *http.Request, out any) ([]byte, erro
 		var body struct {
 			Error   string `json:"error"`
 			Message string `json:"message"`
+			Code    string `json:"code"`
+			Detail  string `json:"detail"`
 		}
 		if json.Unmarshal(raw, &body) == nil {
 			e.Code, e.Message = body.Error, body.Message
+			if e.Code == "" {
+				e.Code = body.Code
+			}
+			if e.Message == "" {
+				e.Message = body.Detail
+			}
 		} else if s := strings.TrimSpace(string(raw)); s != "" && len(s) < 500 {
 			e.Message = s
 		}

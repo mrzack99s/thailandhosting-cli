@@ -131,6 +131,30 @@ th queue receive jobs --max 10 --ack
 th queue tail jobs                     # receive and acknowledge until Ctrl+C
 ```
 
+## Vault
+
+```
+th vault create app-production
+th vault secret set app-production db-password        # reads the value from standard input
+th vault secret get app-production db-password
+th vault key create app-production customer-data --type aes256 --rotation-days 90
+th vault key encrypt app-production customer-data 'hello'
+```
+
+A variable can name a secret instead of holding it. Give the service's service
+account a role that reads secrets on the vault, then:
+
+```
+th container deploy api --image ... --env DB_PASSWORD=vault://app-production/db-password
+```
+
+The value is opened when an instance starts, so restart the service to pick up a new
+version. Add `/2` to pin version 2.
+
+These commands act as whoever signed in with `th auth login`: reading a value needs
+Editor or higher. API keys are refused, so in CI and in your own programs use a service
+account and its SDK. Purging is only in the Console, since it asks for your password again.
+
 ## CI
 
 Create a key in the Console and store it as a secret in your CI:
