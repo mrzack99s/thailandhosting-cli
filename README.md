@@ -29,7 +29,9 @@ irm https://raw.githubusercontent.com/mrzack99s/thailandhosting-cli/main/install
 
 Or download an archive for your system from
 [Releases](https://github.com/mrzack99s/thailandhosting-cli/releases), or
-with Go: `go install github.com/mrzack99s/thailandhosting-cli/cmd/th@latest`.
+with Go: `go install github.com/mrzack99s/thailandhosting-cli/cmd/th@main`.
+Releases are named by the day and commit they were built from
+(`20261021-ab12cd3`).
 
 ## Get started
 

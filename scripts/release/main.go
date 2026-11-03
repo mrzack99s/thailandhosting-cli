@@ -1,9 +1,11 @@
 // Command release cross-compiles th and writes release archives:
 //
-//	go run ./scripts/release -version 0.1.0
+//	go run ./scripts/release
 //
 // It writes dist/th_<version>_<os>_<arch>.tar.gz (.zip for Windows) and
-// dist/SHA256SUMS.
+// dist/SHA256SUMS. The version, and the GitHub release tag, is the UTC day of
+// the commit and the commit (20261021-ab12cd3), like every ThailandHosting
+// repo; -version overrides it.
 package main
 
 import (
@@ -19,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -29,15 +32,33 @@ var targets = []struct{ os, arch string }{
 	{"windows", "amd64"}, {"windows", "arm64"},
 }
 
+// commitVersion is the UTC day of the last commit and that commit
+// (20261021-ab12cd3), "-dirty" when the work tree has uncommitted changes.
+func commitVersion() string {
+	out, err := exec.Command("git", "log", "-1", "--format=%ct %h", "--abbrev=7").Output()
+	if err != nil {
+		fail(fmt.Errorf("git log: %w", err))
+	}
+	ts, sha, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
+	sec, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		fail(fmt.Errorf("git log: %q", out))
+	}
+	v := time.Unix(sec, 0).UTC().Format("20060102") + "-" + sha
+	if out, err := exec.Command("git", "status", "--porcelain", "--untracked-files=no").Output(); err == nil && len(strings.TrimSpace(string(out))) > 0 {
+		v += "-dirty"
+	}
+	return v
+}
+
 func main() {
-	version := flag.String("version", "", "version to stamp, e.g. 0.1.0")
+	version := flag.String("version", "", "version to stamp (default: the commit version, 20261021-ab12cd3)")
 	out := flag.String("out", "dist", "output directory")
 	flag.Parse()
-	if *version == "" {
-		fmt.Fprintln(os.Stderr, "usage: go run ./scripts/release -version X.Y.Z")
-		os.Exit(2)
+	v := *version
+	if v == "" {
+		v = commitVersion()
 	}
-	v := strings.TrimPrefix(*version, "v")
 	if err := os.RemoveAll(*out); err != nil {
 		fail(err)
 	}

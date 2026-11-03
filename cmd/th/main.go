@@ -7,7 +7,7 @@ import (
 	"github.com/mrzack99s/thailandhosting-cli/internal/cli"
 )
 
-// version is set at build time: -ldflags "-X main.version=1.2.3".
+// version is set at build time: -ldflags "-X main.version=20261021-ab12cd3".
 var version = "dev"
 
 func main() {

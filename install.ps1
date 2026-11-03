@@ -17,9 +17,12 @@
     $version = (Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest").tag_name
   }
   $version = $version.TrimStart('v')
+  # Releases are tagged with their version (20261021-ab12cd3); the early ones
+  # were v0.x.y.
+  $tag = if ($version.Contains('.')) { "v$version" } else { $version }
 
   $archive = "th_${version}_windows_$arch.zip"
-  $base = "https://github.com/$repo/releases/download/v$version"
+  $base = "https://github.com/$repo/releases/download/$tag"
   $tmp = Join-Path ([IO.Path]::GetTempPath()) ("th-install-" + [Guid]::NewGuid())
   New-Item -ItemType Directory -Path $tmp | Out-Null
   try {

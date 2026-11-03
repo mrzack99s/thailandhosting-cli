@@ -3,7 +3,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/mrzack99s/thailandhosting-cli/main/install.sh | sh
 #
-# TH_VERSION=0.1.0 picks a version (default: the latest release);
+# TH_VERSION=20261021-ab12cd3 picks a version (default: the latest release);
 # TH_INSTALL_DIR picks where th goes (default: /usr/local/bin, or
 # ~/.local/bin when that is not writable). The archive is checked against
 # the release's SHA256SUMS before anything is installed.
@@ -28,9 +28,12 @@ if [ -z "$version" ]; then
 fi
 [ -n "$version" ] || { echo "th: could not find the latest release" >&2; exit 1; }
 version="${version#v}"
+# Releases are tagged with their version (20261021-ab12cd3); the early ones
+# were v0.x.y.
+case "$version" in *.*) tag="v$version" ;; *) tag="$version" ;; esac
 
 archive="th_${version}_${os}_${arch}.tar.gz"
-base="https://github.com/$repo/releases/download/v$version"
+base="https://github.com/$repo/releases/download/$tag"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
