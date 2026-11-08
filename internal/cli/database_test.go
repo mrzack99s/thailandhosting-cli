@@ -76,7 +76,8 @@ func (f *fakeDB) handler(w http.ResponseWriter, r *http.Request) {
 			"cache":    []map[string]any{{"id": "cache-b1", "name": "Burst 1", "series": "burstable", "cpuQuota": 25000, "burstCpuQuota": 100000, "memoryMB": 1024}},
 		}})
 	case "POST /api/v1/services":
-		writeJSON(w, 201, map[string]any{"id": "new", "slug": f.bodies[key]["slug"], "status": "deploying", "regionId": "th-bkk", "cpuQuota": 100000, "memoryMB": 2048})
+		writeJSON(w, 201, map[string]any{"id": "new", "slug": f.bodies[key]["slug"], "status": "deploying", "regionId": "th-bkk", "cpuQuota": 100000, "memoryMB": 2048,
+			"credentials": map[string]any{"user": "app", "password": "first-secret"}})
 	case "GET /api/v1/services/d1/connection", "PUT /api/v1/services/d1/connectivity":
 		writeJSON(w, 200, f.pgConn(key))
 	case "GET /api/v1/services/d2/connection":
@@ -170,6 +171,9 @@ func TestDatabaseCreatePostgresBody(t *testing.T) {
 		"--public", "--allow", "203.0.113.10/32,198.51.100.0/24", "--backups", "--backup-hours", "12", "--backup-window", "3", "--backup-keep", "14")
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, h.errOut)
+	}
+	if !strings.Contains(h.out.String(), "Password: first-secret") {
+		t.Errorf("create shows the password once: %s", h.out.String())
 	}
 	b := f.body("POST /api/v1/services")
 	want := map[string]any{"kind": "database", "engine": "postgres-18", "name": "orders", "slug": "orders", "projectId": "p1", "regionId": "th-bkk",

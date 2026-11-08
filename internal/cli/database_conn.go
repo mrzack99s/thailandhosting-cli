@@ -74,7 +74,7 @@ func dbEnableHint(p *dbProduct, slug string) string {
 
 func dbCredentialsCmd(c *cmd, p *dbProduct, args []string) error {
 	usage := fmt.Sprintf("th %s credentials NAME [--format json]", p.group)
-	fs := newFlagSet(p.group+" credentials", "Usage: "+usage+"\n\nPrints the user, password and connection URLs of a "+p.noun+".\nThe password is shown only to members who may operate it.")
+	fs := newFlagSet(p.group+" credentials", "Usage: "+usage+"\n\nPrints the user and connection URLs of a "+p.noun+".\nThe password is shown once, when the "+p.noun+" is created or rotated.")
 	if err := c.parse(fs, args); err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func dbCredentialsCmd(c *cmd, p *dbProduct, args []string) error {
 	if pw != "" {
 		fmt.Fprintf(w, "Password:     %s\n", pw)
 	} else {
-		fmt.Fprintf(w, "Password:     (hidden — your role in this Project cannot see it)\n")
+		fmt.Fprintf(w, "Password:     (shown once, when created or rotated; rotate it in the Console if lost)\n")
 	}
 	if out.Database != "" {
 		fmt.Fprintf(w, "Database:     %s\n", out.Database)
@@ -280,8 +280,8 @@ func dbConnect(c *cmd, p *dbProduct, args []string) error {
 	usage := fmt.Sprintf("th %s connect NAME [--public | --private] [-- CLIENT-ARGS...]", p.group)
 	fs := newFlagSet(p.group+" connect", "Usage: "+usage+`
 
-Opens the engine's own client (psql, mysql/mariadb, redis-cli/valkey-cli)
-with the credentials passed through the environment, never the command line.
+Opens the engine's own client (psql, mysql/mariadb, redis-cli/valkey-cli),
+which asks for the password.
 
 By default it uses the public TLS endpoint, which must be enabled and allow
 your address. --private uses the private address, which is reachable only
@@ -318,7 +318,7 @@ from inside the Project's VPC. Arguments after -- go to the client.`)
 		c.info("Connecting to the private address %s (reachable only from inside the Project's VPC).", privAddr)
 	}
 	if conn.Credentials.PasswordHidden || conn.Credentials.Password == "" {
-		c.info("Your role in this Project cannot see the password; the client will ask for it.")
+		c.info("The client will ask for the password, which is shown once, when the %s is created or rotated.", p.noun)
 	}
 	plan := dbConnectPlan(conn, !private, extra)
 	for _, cand := range plan.Candidates {

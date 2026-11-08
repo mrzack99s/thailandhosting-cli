@@ -6,6 +6,7 @@ package cli
 // both groups, parameterised by dbProduct.
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -529,7 +530,7 @@ func dbDescribe(c *cmd, p *dbProduct, args []string) error {
 			fmt.Fprintf(w, "Database:       %s\n", conn.Credentials.Database)
 		}
 	}
-	fmt.Fprintf(w, "\nCredentials: th %s credentials %s\n", p.group, s.Slug)
+	fmt.Fprintf(w, "\nConnection details: th %s credentials %s\n", p.group, s.Slug)
 	return nil
 }
 
@@ -646,7 +647,17 @@ func dbCreate(c *cmd, p *dbProduct, args []string) error {
 	if out.CPUQuota > 0 {
 		fmt.Fprintf(c.app.Stdout, "Size: %s\n", dbSizeText(out.CPUQuota, out.CPUBurst, out.MemoryMB))
 	}
-	fmt.Fprintf(c.app.Stdout, "Credentials: th %s credentials %s\n", p.group, name)
+	var first struct {
+		Credentials struct {
+			User     string `json:"user"`
+			Password string `json:"password"`
+		} `json:"credentials"`
+	}
+	if json.Unmarshal(raw, &first) == nil && first.Credentials.Password != "" {
+		fmt.Fprintf(c.app.Stdout, "User:     %s\nPassword: %s\n", first.Credentials.User, first.Credentials.Password)
+		c.info("Keep this password now: it will not be shown again. If you lose it, rotate it in the Console.")
+	}
+	fmt.Fprintf(c.app.Stdout, "Connection details: th %s credentials %s\n", p.group, name)
 	if public && len(cidrs) == 0 {
 		c.info("The public endpoint allows no addresses yet. Add yours with: th %s public %s --allow <your-ip>/32", p.group, name)
 	}
