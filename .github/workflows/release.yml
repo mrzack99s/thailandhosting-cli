@@ -1,11 +1,15 @@
-# Pushing a tag v<major>.<minor>.<patch> builds th for every platform,
-# attests where the archives came from, and publishes a GitHub Release.
-# Downloads are served by GitHub, never by ThailandHosting's servers.
+# Pushing a tag named like the version (20261108-ab12cd3: the UTC day of the
+# commit and the commit) builds th for every platform, attests where the
+# archives came from, and publishes a GitHub Release. The early v0.x tags
+# still build the same way. Downloads are served by GitHub, never by
+# ThailandHosting's servers.
 name: release
 
 on:
   push:
-    tags: ["v*.*.*"]
+    tags:
+      - "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-*"
+      - "v*.*.*"
 
 permissions:
   contents: write      # create the release
